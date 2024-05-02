@@ -1,16 +1,48 @@
+use core::fmt;
+
 use iced::widget::{column, text, text_input, vertical_space};
 use iced::{executor, Application, Command, Element, Font, Length, Settings, Theme};
+use llama_cpp::{LlamaModel, LlamaParams};
 
-#[derive(Debug, Default)]
 struct Tic {
     input_buffer: String,
     message_containers: Vec<MessageContainer>,
+    llama_model: Option<LlamaModel>,
 }
 
 #[derive(Debug, Clone)]
 enum Event {
     Input(String),
     Submit,
+    ModelLoaded(LabelledLlamaModel),
+    ModelLoadError(String),
+}
+
+#[derive(Clone)]
+struct LabelledLlamaModel {
+    label: String,
+    model: LlamaModel,
+}
+
+impl From<LlamaModel> for LabelledLlamaModel {
+    fn from(model: LlamaModel) -> Self {
+        LabelledLlamaModel {
+            label: "Llama Model".into(),
+            model,
+        }
+    }
+}
+
+impl fmt::Debug for LabelledLlamaModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LabelledLlamaModel")
+            .field("model", &self.label)
+            .finish()
+    }
+}
+
+struct Flags {
+    model_path: String,
 }
 
 impl Application for Tic {
@@ -18,20 +50,28 @@ impl Application for Tic {
 
     type Theme = Theme;
 
-    type Flags = ();
+    type Flags = Flags;
 
     type Message = Event;
 
-    fn new(_flags: Self::Flags) -> (Tic, iced::Command<Event>) {
+    fn new(flags: Self::Flags) -> (Tic, iced::Command<Event>) {
+        let path = flags.model_path.clone();
         (
             Tic {
                 message_containers: vec![MessageContainer::new(
                     "Hello, world!",
                     MessageType::AssistantMessage,
                 )],
-                ..Default::default()
+                input_buffer: String::new(),
+                llama_model: None,
             },
-            Command::none(),
+            Command::perform(
+                LlamaModel::load_from_file_async(path, LlamaParams::default()),
+                |load_result| match load_result {
+                    Ok(model) => Event::ModelLoaded(LabelledLlamaModel::from(model)),
+                    Err(err) => Event::ModelLoadError(err.to_string()),
+                },
+            ),
         )
     }
 
@@ -51,6 +91,10 @@ impl Application for Tic {
                 ));
                 self.input_buffer.clear();
             }
+            Event::ModelLoaded(model) => {
+                self.llama_model = Some(model.model);
+            }
+            Event::ModelLoadError(e) => eprintln!("Error loading model: {}", e),
         }
         Command::none()
     }
@@ -75,13 +119,13 @@ impl Application for Tic {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct MessageContainer {
     value: String,
     message_type: MessageType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum MessageType {
     UserMessage,
     AssistantMessage,
@@ -104,5 +148,7 @@ impl MessageContainer {
 }
 
 fn main() -> iced::Result {
-    Tic::run(Settings::default())
+    Tic::run(Settings::with_flags(Flags {
+        model_path: "./Meta-Llama-3-8B-Instruct.Q4_K_M.gguf".into(),
+    }))
 }
