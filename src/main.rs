@@ -1,4 +1,3 @@
-use iced::theme::TextInput;
 use iced::widget::{column, text, text_input, vertical_space};
 use iced::{executor, Application, Command, Element, Font, Length, Settings, Theme};
 
@@ -62,7 +61,6 @@ impl Application for Tic {
             vertical_space(),
             messages,
             text_input("Ask me something", &self.input_buffer)
-                .style(TextInput::Custom(Box::new(InputStyle::default())))
                 .on_input(Event::Input)
                 .on_submit(Event::Submit),
         ]
@@ -74,43 +72,6 @@ impl Application for Tic {
 
     fn theme(&self) -> Self::Theme {
         Theme::Nord
-    }
-}
-
-#[derive(Default)]
-struct InputStyle {
-  default_style: iced::theme::TextInput
-}
-
-impl text_input::StyleSheet for InputStyle {
-    type Style = Theme;
-
-    fn active(&self, style: &Self::Style) -> text_input::Appearance {
-        style.active(&self.default_style)
-    }
-
-    fn focused(&self, style: &Self::Style) -> text_input::Appearance {
-        style.focused(&self.default_style)
-    }
-
-    fn placeholder_color(&self, style: &Self::Style) -> iced::Color {
-        style.placeholder_color(&self.default_style)
-    }
-
-    fn value_color(&self, style: &Self::Style) -> iced::Color {
-        style.value_color(&self.default_style)
-    }
-
-    fn disabled_color(&self, style: &Self::Style) -> iced::Color {
-        style.disabled_color(&self.default_style)
-    }
-
-    fn selection_color(&self, style: &Self::Style) -> iced::Color {
-        style.selection_color(&self.default_style)
-    }
-
-    fn disabled(&self, style: &Self::Style) -> text_input::Appearance {
-        style.disabled(&self.default_style)
     }
 }
 
