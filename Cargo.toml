@@ -6,5 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+diesel = { version = "2.1.6", features = ["sqlite"] }
 iced = "0.12.1"
 llama_cpp = { version = "0.3.2", features = ["metal"] }
+oasysdb = "0.4.4"
