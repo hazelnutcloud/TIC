@@ -2,40 +2,31 @@ use core::fmt;
 
 use iced::widget::{column, text, text_input, vertical_space};
 use iced::{executor, Application, Command, Element, Font, Length, Settings, Theme};
-use llama_cpp::{LlamaModel, LlamaParams};
+use llama_cpp::{LlamaModel, LlamaParams, LlamaSession, SessionParams};
 
 struct Tic {
     input_buffer: String,
     message_containers: Vec<MessageContainer>,
-    llama_model: Option<LlamaModel>,
+    session: Option<LoadedSession>,
 }
 
 #[derive(Debug, Clone)]
 enum Event {
     Input(String),
     Submit,
-    ModelLoaded(LabelledLlamaModel),
+    ModelLoaded(LoadedSession),
     ModelLoadError(String),
 }
 
 #[derive(Clone)]
-struct LabelledLlamaModel {
+struct LoadedSession {
     label: String,
-    model: LlamaModel,
+    session: LlamaSession,
 }
 
-impl From<LlamaModel> for LabelledLlamaModel {
-    fn from(model: LlamaModel) -> Self {
-        LabelledLlamaModel {
-            label: "Llama Model".into(),
-            model,
-        }
-    }
-}
-
-impl fmt::Debug for LabelledLlamaModel {
+impl fmt::Debug for LoadedSession {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LabelledLlamaModel")
+        f.debug_struct("LoadedSession")
             .field("model", &self.label)
             .finish()
     }
@@ -63,12 +54,21 @@ impl Application for Tic {
                     MessageType::AssistantMessage,
                 )],
                 input_buffer: String::new(),
-                llama_model: None,
+                session: None,
             },
             Command::perform(
-                LlamaModel::load_from_file_async(path, LlamaParams::default()),
-                |load_result| match load_result {
-                    Ok(model) => Event::ModelLoaded(LabelledLlamaModel::from(model)),
+                LlamaModel::load_from_file_async(path.clone(), LlamaParams::default()),
+                move |load_result| match load_result {
+                    Ok(model) => {
+                        if let Ok(session) = model.create_session(SessionParams::default()) {
+                            Event::ModelLoaded(LoadedSession {
+                                label: path.clone(),
+                                session,
+                            })
+                        } else {
+                            Event::ModelLoadError("Error creating session".into())
+                        }
+                    }
                     Err(err) => Event::ModelLoadError(err.to_string()),
                 },
             ),
@@ -90,9 +90,10 @@ impl Application for Tic {
                     MessageType::UserMessage,
                 ));
                 self.input_buffer.clear();
+                // TODO: Create completion
             }
-            Event::ModelLoaded(model) => {
-                self.llama_model = Some(model.model);
+            Event::ModelLoaded(session) => {
+                self.session = Some(session);
             }
             Event::ModelLoadError(e) => eprintln!("Error loading model: {}", e),
         }
