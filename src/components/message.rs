@@ -7,12 +7,14 @@ pub struct MessageContainer {
     pub text: String,
     pub sender: Sender,
     pub completion_request: Option<CompletionRequest>,
+    pub include_in_completion: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Sender {
     User,
     Assistant,
+    System,
 }
 
 impl MessageContainer {
@@ -20,11 +22,13 @@ impl MessageContainer {
         message: &str,
         sender: Sender,
         completion_request: Option<CompletionRequest>,
+        include_in_completion: bool,
     ) -> Self {
         MessageContainer {
             text: message.to_string(),
             sender,
             completion_request,
+            include_in_completion,
         }
     }
 
@@ -36,6 +40,7 @@ impl MessageContainer {
                 default_text_color.g - 0.2,
                 default_text_color.b,
             ),
+            _ => default_text_color,
         };
         text(self.text.clone())
             .font(Font::MONOSPACE)

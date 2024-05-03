@@ -2,6 +2,7 @@ use iced::widget::{column, container, scrollable, text_input};
 use iced::{executor, Application, Command, Element, Length, Subscription, Theme};
 use llama_cpp::{LlamaModel, LlamaParams, SessionParams};
 
+use crate::completions::chat::{ChatMessage, ChatTemplate, ChatTemplater};
 use crate::{
     completions::{CompletionRequest, CompletionRequestState, CompletionResponse, LoadedSession},
     components::message::{MessageContainer, Sender},
@@ -25,6 +26,7 @@ pub struct Tic {
     message_containers: Vec<MessageContainer>,
     session: Option<LoadedSession>,
     request_id: usize,
+    chat_templater: ChatTemplater,
 }
 
 impl Application for Tic {
@@ -38,13 +40,15 @@ impl Application for Tic {
         (
             Tic {
                 message_containers: vec![MessageContainer::new(
-                    "Hello, world!",
+                    "I am TIC, the Text Inference Companion. How can I help you?",
                     Sender::Assistant,
                     None,
+                    false,
                 )],
                 input_buffer: String::new(),
                 session: None,
                 request_id: 0,
+                chat_templater: ChatTemplater::new().expect("Failed to create chat templater"),
             },
             Command::perform(
                 LlamaModel::load_from_file_async(path.clone(), LlamaParams::default()),
@@ -80,6 +84,31 @@ impl Application for Tic {
                 }
 
                 let input = self.input_buffer.clone();
+                let mut conversation = vec![ChatMessage {
+                    sender: Sender::System,
+                    text: "You are a helpful assistant called TIC, the Text Inference Companion."
+                        .into(),
+                }];
+                conversation.append(
+                    &mut self
+                        .message_containers
+                        .iter()
+                        .filter(|container| container.include_in_completion)
+                        .map(ChatMessage::from)
+                        .collect::<Vec<_>>(),
+                );
+                conversation.push(ChatMessage {
+                    sender: Sender::User,
+                    text: input.clone(),
+                });
+                let input = self
+                    .chat_templater
+                    .apply(ChatTemplate::Llama3, conversation)
+                    .unwrap_or_else(|e| {
+                        eprintln!("Error applying template: {:?}", e);
+                        input
+                    });
+                println!("Input: {}", input);
                 let completion_request =
                     CompletionRequest::new(self.request_id, &input, self.session.clone().unwrap());
 
@@ -87,11 +116,13 @@ impl Application for Tic {
                     &self.input_buffer,
                     Sender::User,
                     None,
+                    true,
                 ));
                 self.message_containers.push(MessageContainer::new(
                     "...",
                     Sender::Assistant,
                     Some(completion_request),
+                    true,
                 ));
                 self.input_buffer.clear();
                 self.request_id += 1;
@@ -108,6 +139,9 @@ impl Application for Tic {
                         }
                         false
                     }) {
+                        if container.text == "..." {
+                            container.text.clear();
+                        }
                         container.text.push_str(&text);
                     } else {
                         eprintln!("No completion request found for id {}", id);
@@ -163,11 +197,11 @@ impl Application for Tic {
             .spacing(5);
         let messages = scrollable(messages).height(Length::Fill);
         let input = if self.session.is_some() {
-            text_input("How can I help you?", &self.input_buffer)
+            text_input("Ask me anything...", &self.input_buffer)
                 .on_submit(Event::Submit)
                 .on_input(Event::Input)
         } else {
-            text_input("How can I help you?", &self.input_buffer).on_submit(Event::Submit)
+            text_input("Loading...", &self.input_buffer).on_submit(Event::Submit)
         };
         container(column![messages, input].spacing(10.0))
             .width(Length::Fill)
