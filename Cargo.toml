@@ -7,8 +7,6 @@ edition = "2021"
 
 [dependencies]
 diesel = { version = "2.1.6", features = ["sqlite"] }
-eframe = "0.27.2"
-egui = "0.27.2"
+iced = { version = "0.12.1", features = ["tokio"] }
 llama_cpp = { version = "0.3.2", features = ["metal"] }
 oasysdb = "0.4.4"
-tokio = { version = "1.37.0", features = ["full"] }

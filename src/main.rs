@@ -1,8 +1,155 @@
-#[tokio::main]
-async fn main() -> eframe::Result<()> {
-    eframe::run_native(
-        "TIC",
-        eframe::NativeOptions::default(),
-        Box::new(|cc| Box::new(tic::TicApp::new(cc))),
-    )
+use core::fmt;
+
+use iced::widget::{column, text, text_input, vertical_space};
+use iced::{executor, Application, Command, Element, Font, Length, Settings, Theme};
+use llama_cpp::{LlamaModel, LlamaParams, LlamaSession, SessionParams};
+
+struct Tic {
+    input_buffer: String,
+    message_containers: Vec<MessageContainer>,
+    session: Option<LoadedSession>,
+}
+
+#[derive(Debug, Clone)]
+enum Event {
+    Input(String),
+    Submit,
+    ModelLoaded(LoadedSession),
+    ModelLoadError(String),
+}
+
+#[derive(Clone)]
+struct LoadedSession {
+    label: String,
+    session: LlamaSession,
+}
+
+impl fmt::Debug for LoadedSession {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LoadedSession")
+            .field("model", &self.label)
+            .finish()
+    }
+}
+
+struct Flags {
+    model_path: String,
+}
+
+impl Application for Tic {
+    type Executor = executor::Default;
+
+    type Theme = Theme;
+
+    type Flags = Flags;
+
+    type Message = Event;
+
+    fn new(flags: Self::Flags) -> (Tic, iced::Command<Event>) {
+        let path = flags.model_path.clone();
+        (
+            Tic {
+                message_containers: vec![MessageContainer::new(
+                    "Hello, world!",
+                    MessageType::AssistantMessage,
+                )],
+                input_buffer: String::new(),
+                session: None,
+            },
+            Command::perform(
+                LlamaModel::load_from_file_async(path.clone(), LlamaParams::default()),
+                move |load_result| match load_result {
+                    Ok(model) => {
+                        if let Ok(session) = model.create_session(SessionParams::default()) {
+                            Event::ModelLoaded(LoadedSession {
+                                label: path.clone(),
+                                session,
+                            })
+                        } else {
+                            Event::ModelLoadError("Error creating session".into())
+                        }
+                    }
+                    Err(err) => Event::ModelLoadError(err.to_string()),
+                },
+            ),
+        )
+    }
+
+    fn title(&self) -> String {
+        "TIC - Text Inference Companion".into()
+    }
+
+    fn update(&mut self, message: Self::Message) -> iced::Command<Event> {
+        match message {
+            Event::Input(input) => {
+                self.input_buffer = input;
+            }
+            Event::Submit => {
+                self.message_containers.push(MessageContainer::new(
+                    &self.input_buffer,
+                    MessageType::UserMessage,
+                ));
+                self.input_buffer.clear();
+                // TODO: Create completion
+            }
+            Event::ModelLoaded(session) => {
+                self.session = Some(session);
+            }
+            Event::ModelLoadError(e) => eprintln!("Error loading model: {}", e),
+        }
+        Command::none()
+    }
+
+    fn view(&self) -> Element<Self::Message> {
+        let messages = column(self.message_containers.iter().map(MessageContainer::view));
+        column![
+            vertical_space(),
+            messages,
+            text_input("Ask me something", &self.input_buffer)
+                .on_input(Event::Input)
+                .on_submit(Event::Submit),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(20)
+        .into()
+    }
+
+    fn theme(&self) -> Self::Theme {
+        Theme::Nord
+    }
+}
+
+#[derive(Debug)]
+struct MessageContainer {
+    value: String,
+    message_type: MessageType,
+}
+
+#[derive(Debug)]
+enum MessageType {
+    UserMessage,
+    AssistantMessage,
+}
+
+impl MessageContainer {
+    fn new(message: &str, message_type: MessageType) -> Self {
+        MessageContainer {
+            value: message.to_string(),
+            message_type,
+        }
+    }
+
+    fn view(&self) -> Element<Event> {
+        text(self.value.clone())
+            .font(Font::MONOSPACE)
+            .size(12)
+            .into()
+    }
+}
+
+fn main() -> iced::Result {
+    Tic::run(Settings::with_flags(Flags {
+        model_path: "./Meta-Llama-3-8B-Instruct.Q4_K_M.gguf".into(),
+    }))
 }
