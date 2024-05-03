@@ -72,7 +72,7 @@ pub async fn run_completion(
                         match first {
                             Some(first) => (
                                 (id, CompletionResponse::Text(first)),
-                                CompletionState::Processing((stream, None)),
+                                CompletionState::Processing(stream),
                             ),
                             None => ((id, CompletionResponse::Done), CompletionState::Done),
                         }
@@ -84,48 +84,22 @@ pub async fn run_completion(
                 }
             }
         }
-        CompletionState::Processing((mut stream, eos_check)) => {
-            println!("eos_check: {:?}", eos_check);
-            if let Some(maybe_eos) = &eos_check {
-                if maybe_eos.starts_with("<|eot_id|>") {
-                    return ((id, CompletionResponse::Done), CompletionState::Done);
-                }
+        CompletionState::Processing(mut stream) => match StreamExt::next(&mut stream).await {
+            Some(text) => {
+                return (
+                    (id, CompletionResponse::Text(text)),
+                    CompletionState::Processing(stream),
+                );
             }
-            let mut eos_check = eos_check.clone();
-            loop {
-                match StreamExt::next(&mut stream).await {
-                    Some(text) => {
-                        println!("text: {:?}", text);
-                        eos_check = match eos_check {
-                            Some(partial_eos) => {
-                                let partial_eos = partial_eos + &text;
-                                ("<|eot_id|>".starts_with(&partial_eos)
-                                    || partial_eos.starts_with("<|eot_id|>"))
-                                .then_some(partial_eos)
-                            }
-                            None => text
-                                .contains("<")
-                                .then(|| text.get(text.find("<").unwrap()..).unwrap().to_string()),
-                        };
-                        if eos_check.is_some() {
-                            continue;
-                        }
-                        return (
-                            (id, CompletionResponse::Text(text)),
-                            CompletionState::Processing((stream, eos_check)),
-                        );
-                    }
-                    None => return ((id, CompletionResponse::Done), CompletionState::Done),
-                }
-            }
-        }
+            None => return ((id, CompletionResponse::Done), CompletionState::Done),
+        },
         CompletionState::Done => iced::futures::future::pending().await,
     }
 }
 
 pub enum CompletionState {
     Ready((String, LoadedSession)),
-    Processing((TokensToStrings<CompletionHandle>, Option<String>)),
+    Processing(TokensToStrings<CompletionHandle>),
     Done,
 }
 
