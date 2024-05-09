@@ -10,6 +10,7 @@ use crate::{
 
 pub struct Flags {
     pub model_path: String,
+    pub chat_template: ChatTemplate,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +28,7 @@ pub struct Tic {
     session: Option<LoadedSession>,
     request_id: usize,
     chat_templater: ChatTemplater,
+    chat_template: ChatTemplate,
 }
 
 impl Application for Tic {
@@ -49,6 +51,7 @@ impl Application for Tic {
                 session: None,
                 request_id: 0,
                 chat_templater: ChatTemplater::new().expect("Failed to create chat templater"),
+                chat_template: flags.chat_template,
             },
             Command::perform(
                 LlamaModel::load_from_file_async(path.clone(), LlamaParams::default()),
@@ -103,7 +106,7 @@ impl Application for Tic {
                 });
                 let input = self
                     .chat_templater
-                    .apply(ChatTemplate::Llama3, conversation)
+                    .apply(self.chat_template, conversation)
                     .unwrap_or_else(|e| {
                         eprintln!("Error applying template: {:?}", e);
                         input

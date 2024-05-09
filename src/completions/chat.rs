@@ -10,6 +10,7 @@ impl ChatTemplater {
     pub fn new() -> Result<ChatTemplater, minijinja::Error> {
         let mut env = Environment::new();
         env.add_template("llama3", include_str!("templates/llama3.jinja"))?;
+        env.add_template("phi3", include_str!("templates/phi3.jinja"))?;
         Ok(ChatTemplater { env })
     }
 
@@ -18,31 +19,41 @@ impl ChatTemplater {
         template: ChatTemplate,
         conversation: Vec<ChatMessage>,
     ) -> Result<String, minijinja::Error> {
-        match template {
+        let (bos_token, tmpl) = match template {
             ChatTemplate::Llama3 => {
                 let tmpl = self.env.get_template("llama3")?;
-                let rendered = tmpl.render(context! {
-                  messages => conversation.iter().map(|message| {
-                    context! {
-                      content => message.text,
-                      role => match message.sender {
-                          Sender::User => "user",
-                          Sender::Assistant => "assistant",
-                          Sender::System => "system",
-                      }
-                    }
-                  }).collect::<Vec<_>>(),
-                  bos_token => "<|begin_of_text|>",
-                  add_generation_prompt => true
-                })?;
-                Ok(rendered)
+                let bos_token = "<|start_header_id|>";
+                (bos_token, tmpl)
             }
-        }
+            ChatTemplate::Phi3 => {
+                let tmpl = self.env.get_template("phi3")?;
+                let bos_token = "<s>";
+                (bos_token, tmpl)
+            }
+        };
+
+        let rendered = tmpl.render(context! {
+          messages => conversation.iter().map(|message| {
+            context! {
+              content => message.text,
+              role => match message.sender {
+                  Sender::User => "user",
+                  Sender::Assistant => "assistant",
+                  Sender::System => "system",
+              }
+            }
+          }).collect::<Vec<_>>(),
+          bos_token => bos_token,
+          add_generation_prompt => true
+        })?;
+        Ok(rendered)
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ChatTemplate {
     Llama3,
+    Phi3,
 }
 
 pub struct ChatMessage {

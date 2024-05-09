@@ -1,9 +1,11 @@
 use iced::Application;
 use iced::Settings;
-use tic::{Flags, Tic};
+use tic::{ChatTemplate, Flags, Tic};
 
 fn main() -> iced::Result {
+    tracing_subscriber::fmt::init();
     Tic::run(Settings::with_flags(Flags {
-        model_path: "./Meta-Llama-3-8B-Instruct.Q4_K_M.gguf".into(),
+        model_path: "./kappa-3-phi-3-4k-instruct-abliterated-f16.gguf".into(),
+        chat_template: ChatTemplate::Phi3,
     }))
 }
